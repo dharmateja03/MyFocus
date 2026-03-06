@@ -2,7 +2,6 @@ import Darwin
 import Foundation
 import os
 
-@MainActor
 final class PerformanceMonitor {
     struct Snapshot: Sendable {
         let timestamp: Date
@@ -77,18 +76,43 @@ final class PerformanceMonitor {
     }
 
     private func readUsage() -> Usage? {
-        var usage = rusage_info_current()
-        let result = withUnsafeMutablePointer(to: &usage) { pointer in
-            proc_pid_rusage(getpid(), RUSAGE_INFO_CURRENT, pointer)
+        var threadInfo = task_thread_times_info_data_t()
+        var threadInfoCount = mach_msg_type_number_t(MemoryLayout.size(ofValue: threadInfo) / MemoryLayout<natural_t>.size)
+        let threadInfoResult: kern_return_t = withUnsafeMutablePointer(to: &threadInfo) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(threadInfoCount)) { intPointer in
+                task_info(
+                    mach_task_self_,
+                    task_flavor_t(TASK_THREAD_TIMES_INFO),
+                    intPointer,
+                    &threadInfoCount
+                )
+            }
         }
 
-        guard result == 0 else {
+        guard threadInfoResult == KERN_SUCCESS else {
             return nil
         }
 
-        let userSeconds = Double(usage.ri_user_time) / 1_000_000_000
-        let systemSeconds = Double(usage.ri_system_time) / 1_000_000_000
-        let residentBytes = Double(usage.ri_resident_size)
+        var basicInfo = mach_task_basic_info_data_t()
+        var basicInfoCount = mach_msg_type_number_t(MemoryLayout.size(ofValue: basicInfo) / MemoryLayout<natural_t>.size)
+        let basicInfoResult: kern_return_t = withUnsafeMutablePointer(to: &basicInfo) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(basicInfoCount)) { intPointer in
+                task_info(
+                    mach_task_self_,
+                    task_flavor_t(MACH_TASK_BASIC_INFO),
+                    intPointer,
+                    &basicInfoCount
+                )
+            }
+        }
+
+        guard basicInfoResult == KERN_SUCCESS else {
+            return nil
+        }
+
+        let userSeconds = Double(threadInfo.user_time.seconds) + (Double(threadInfo.user_time.microseconds) / 1_000_000)
+        let systemSeconds = Double(threadInfo.system_time.seconds) + (Double(threadInfo.system_time.microseconds) / 1_000_000)
+        let residentBytes = Double(basicInfo.resident_size)
 
         return Usage(userTimeSeconds: userSeconds, systemTimeSeconds: systemSeconds, residentBytes: residentBytes)
     }
