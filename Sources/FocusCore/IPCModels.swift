@@ -1,6 +1,6 @@
 import Foundation
 
-public enum SessionPhase: String, Codable {
+public enum SessionPhase: String, Codable, Sendable {
     case idle
     case running
     case paused
@@ -8,7 +8,7 @@ public enum SessionPhase: String, Codable {
     case cancelled
 }
 
-public struct SessionStartRequest: Codable, Equatable {
+public struct SessionStartRequest: Codable, Equatable, Sendable {
     public let durationSeconds: Int
     public let startedAt: Date
 
@@ -18,7 +18,7 @@ public struct SessionStartRequest: Codable, Equatable {
     }
 }
 
-public struct SessionSnapshot: Codable, Equatable {
+public struct SessionSnapshot: Codable, Equatable, Sendable {
     public let phase: SessionPhase
     public let remainingSeconds: Int
     public let blockedBundleIDs: [String]
