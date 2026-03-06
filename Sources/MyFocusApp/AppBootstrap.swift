@@ -22,12 +22,16 @@ final class AppBootstrap: ObservableObject {
     @Published private(set) var blockedEventCount = 0
     @Published private(set) var lastBlockedBundleID: String?
     @Published private(set) var sessionHistory: [SessionHistoryEntry] = []
+    @Published private(set) var latestCPUPercent = 0.0
+    @Published private(set) var latestMemoryMB = 0.0
+    @Published private(set) var performanceGuardrailMessage: String?
     @Published var lastSessionError: String?
 
     private let sessionEngine = SessionEngine()
     private let appBlocker = ForegroundAppBlocker()
     private let permissionService = PermissionService()
     private let notificationService = NotificationService()
+    private let performanceMonitor = PerformanceMonitor()
     private let persistenceStore = PersistenceStore()
     private var streamTask: Task<Void, Never>?
     private var activeSessionStartedAt: Date?
@@ -38,6 +42,8 @@ final class AppBootstrap: ObservableObject {
         appBlocker.start()
         bindAppBlocker()
         bindSessionEngine()
+        bindPerformanceMonitor()
+        performanceMonitor.start()
         loadPersistedState()
         Task {
             await refreshPermissionStatuses()
@@ -46,6 +52,7 @@ final class AppBootstrap: ObservableObject {
 
     deinit {
         streamTask?.cancel()
+        performanceMonitor.stop()
     }
 
     var isRunning: Bool {
@@ -261,6 +268,23 @@ final class AppBootstrap: ObservableObject {
 
         Task {
             await persistenceStore.saveSettings(settings)
+        }
+    }
+
+    private func bindPerformanceMonitor() {
+        performanceMonitor.onSnapshot = { [weak self] snapshot in
+            guard let self else {
+                return
+            }
+
+            self.latestCPUPercent = snapshot.cpuPercent
+            self.latestMemoryMB = snapshot.memoryMB
+
+            if snapshot.cpuPercent > 1.0 || snapshot.memoryMB > 100.0 {
+                self.performanceGuardrailMessage = "Guardrail exceeded (CPU > 1% or RAM > 100MB)"
+            } else {
+                self.performanceGuardrailMessage = nil
+            }
         }
     }
 
