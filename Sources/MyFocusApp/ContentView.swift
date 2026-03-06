@@ -54,6 +54,24 @@ struct ContentView: View {
             Stepper("Duration: \(bootstrap.selectedDurationMinutes) min", value: $bootstrap.selectedDurationMinutes, in: 1...180)
             Toggle("Enable Session Notifications", isOn: $bootstrap.notificationsEnabled)
 
+            VStack(alignment: .leading, spacing: 4) {
+                Text(
+                    String(
+                        format: "Runtime: CPU %.2f%% • RAM %.1fMB",
+                        bootstrap.latestCPUPercent,
+                        bootstrap.latestMemoryMB
+                    )
+                )
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+
+                if let guardrail = bootstrap.performanceGuardrailMessage {
+                    Text(guardrail)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+
             HStack(spacing: 10) {
                 Button("Start") {
                     bootstrap.startSession()
