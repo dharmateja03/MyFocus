@@ -29,12 +29,20 @@ struct PersistedState: Codable, Sendable {
     static let `default` = PersistedState(settings: .default, history: [])
 }
 
+struct ActiveSessionRecord: Codable, Sendable {
+    var startedAt: Date
+    var remainingSeconds: Int
+    var blockedBundleIDs: [String]
+    var phase: SessionPhase
+}
+
 actor PersistenceStore {
     private let fileManager: FileManager
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private let settingsURL: URL
     private let historyURL: URL
+    private let activeSessionURL: URL
 
     init(fileManager: FileManager = .default, bundleID: String = Bundle.main.bundleIdentifier ?? "MyFocus") {
         self.fileManager = fileManager
@@ -45,6 +53,7 @@ actor PersistenceStore {
 
         settingsURL = baseDirectory.appendingPathComponent("settings.json", isDirectory: false)
         historyURL = baseDirectory.appendingPathComponent("history.json", isDirectory: false)
+        activeSessionURL = baseDirectory.appendingPathComponent("active-session.json", isDirectory: false)
 
         encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -85,6 +94,46 @@ actor PersistenceStore {
             try data.write(to: historyURL, options: [.atomic])
         } catch {
             print("[PersistenceStore] failed to save history: \(error)")
+        }
+    }
+
+    func loadActiveSession() -> ActiveSessionRecord? {
+        createDirectoryIfNeeded()
+        guard fileManager.fileExists(atPath: activeSessionURL.path) else {
+            return nil
+        }
+
+        do {
+            let data = try Data(contentsOf: activeSessionURL)
+            return try decoder.decode(ActiveSessionRecord.self, from: data)
+        } catch {
+            print("[PersistenceStore] failed to load active session: \(error)")
+            return nil
+        }
+    }
+
+    func saveActiveSession(_ record: ActiveSessionRecord) {
+        createDirectoryIfNeeded()
+
+        do {
+            let data = try encoder.encode(record)
+            try data.write(to: activeSessionURL, options: [.atomic])
+        } catch {
+            print("[PersistenceStore] failed to save active session: \(error)")
+        }
+    }
+
+    func clearActiveSession() {
+        createDirectoryIfNeeded()
+
+        guard fileManager.fileExists(atPath: activeSessionURL.path) else {
+            return
+        }
+
+        do {
+            try fileManager.removeItem(at: activeSessionURL)
+        } catch {
+            print("[PersistenceStore] failed to clear active session: \(error)")
         }
     }
 

@@ -199,6 +199,7 @@ final class AppBootstrap: ObservableObject {
                 await MainActor.run {
                     self.sessionSnapshot = snapshot
                     self.appBlocker.setEnforcementEnabled(snapshot.phase == .running)
+                    self.persistActiveSessionIfNeeded(for: snapshot)
                     self.captureHistoryIfNeeded(for: snapshot)
                 }
             }
@@ -241,12 +242,43 @@ final class AppBootstrap: ObservableObject {
     private func loadPersistedState() {
         Task {
             let persisted = await persistenceStore.loadState()
+            let activeSession = await persistenceStore.loadActiveSession()
             await MainActor.run {
                 self.selectedDurationMinutes = persisted.settings.selectedDurationMinutes
                 self.notificationsEnabled = persisted.settings.notificationsEnabled
                 self.blockedAppBundleIDs = persisted.settings.blockedAppBundleIDs
                 self.sessionHistory = persisted.history
                 self.syncBlockedBundleIDs()
+                self.rehydrateActiveSessionIfNeeded(activeSession)
+            }
+        }
+    }
+
+    private func rehydrateActiveSessionIfNeeded(_ record: ActiveSessionRecord?) {
+        guard let record else {
+            return
+        }
+
+        let elapsed = max(0, Int(Date().timeIntervalSince(record.startedAt)))
+        let remaining = max(0, record.remainingSeconds - elapsed)
+
+        guard remaining > 0 else {
+            Task {
+                await persistenceStore.clearActiveSession()
+            }
+            return
+        }
+
+        activeSessionStartedAt = record.startedAt
+
+        Task {
+            do {
+                try await sessionEngine.start(durationSeconds: remaining, blockedBundleIDs: record.blockedBundleIDs)
+                if record.phase == .paused {
+                    try await sessionEngine.pause()
+                }
+            } catch {
+                await persistenceStore.clearActiveSession()
             }
         }
     }
@@ -268,6 +300,31 @@ final class AppBootstrap: ObservableObject {
 
         Task {
             await persistenceStore.saveSettings(settings)
+        }
+    }
+
+    private func persistActiveSessionIfNeeded(for snapshot: SessionSnapshot) {
+        guard snapshot.phase == .running || snapshot.phase == .paused else {
+            if snapshot.phase == .completed || snapshot.phase == .cancelled || snapshot.phase == .idle {
+                Task {
+                    await persistenceStore.clearActiveSession()
+                }
+            }
+            return
+        }
+
+        let startedAt = activeSessionStartedAt ?? .now
+        activeSessionStartedAt = startedAt
+
+        let record = ActiveSessionRecord(
+            startedAt: startedAt,
+            remainingSeconds: snapshot.remainingSeconds,
+            blockedBundleIDs: snapshot.blockedBundleIDs,
+            phase: snapshot.phase
+        )
+
+        Task {
+            await persistenceStore.saveActiveSession(record)
         }
     }
 
