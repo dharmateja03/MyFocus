@@ -1,7 +1,6 @@
 import AppKit
 import Foundation
 
-@MainActor
 final class ForegroundAppBlocker {
     struct Event: Sendable {
         let bundleID: String

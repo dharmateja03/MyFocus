@@ -52,7 +52,6 @@ final class AppBootstrap: ObservableObject {
 
     deinit {
         streamTask?.cancel()
-        performanceMonitor.stop()
     }
 
     var isRunning: Bool {
@@ -217,7 +216,7 @@ final class AppBootstrap: ObservableObject {
         }
 
         let startedAt = activeSessionStartedAt ?? Date().addingTimeInterval(-Double(selectedDurationMinutes * 60))
-        let endedAt = .now
+        let endedAt = Date.now
         let entry = SessionHistoryEntry(
             id: UUID(),
             startedAt: startedAt,

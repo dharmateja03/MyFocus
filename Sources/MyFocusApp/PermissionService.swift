@@ -10,7 +10,7 @@ final class PermissionService {
     }
 
     func requestAccessibilityPrompt() {
-        let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+        let promptKey = "AXTrustedCheckOptionPrompt"
         let options = [promptKey: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
     }
@@ -23,8 +23,10 @@ final class PermissionService {
     }
 
     func notificationAuthorizationGranted() async -> Bool {
-        let settings = await notificationSettings()
-        switch settings.authorizationStatus {
+        let statusRawValue = await notificationAuthorizationStatus()
+        let status = UNAuthorizationStatus(rawValue: statusRawValue) ?? .notDetermined
+
+        switch status {
         case .authorized, .provisional, .ephemeral:
             return true
         case .denied, .notDetermined:
@@ -49,10 +51,10 @@ final class PermissionService {
         }
     }
 
-    private func notificationSettings() async -> UNNotificationSettings {
+    private func notificationAuthorizationStatus() async -> Int {
         await withCheckedContinuation { continuation in
             UNUserNotificationCenter.current().getNotificationSettings { settings in
-                continuation.resume(returning: settings)
+                continuation.resume(returning: settings.authorizationStatus.rawValue)
             }
         }
     }
