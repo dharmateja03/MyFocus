@@ -27,6 +27,7 @@ final class AppBootstrap: ObservableObject {
     private let sessionEngine = SessionEngine()
     private let appBlocker = ForegroundAppBlocker()
     private let permissionService = PermissionService()
+    private let notificationService = NotificationService()
     private let persistenceStore = PersistenceStore()
     private var streamTask: Task<Void, Never>?
     private var activeSessionStartedAt: Date?
@@ -86,6 +87,9 @@ final class AppBootstrap: ObservableObject {
                 try await sessionEngine.start(durationSeconds: duration, blockedBundleIDs: blockedAppBundleIDs)
                 await MainActor.run {
                     self.lastSessionError = nil
+                    if self.notificationsEnabled, self.notificationPermissionGranted {
+                        self.notificationService.sendSessionStarted(minutes: self.selectedDurationMinutes)
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -174,6 +178,9 @@ final class AppBootstrap: ObservableObject {
                 }
                 self.blockedEventCount += 1
                 self.lastBlockedBundleID = event.bundleID
+                if self.notificationsEnabled, self.notificationPermissionGranted {
+                    self.notificationService.sendBlockedAppEvent(bundleID: event.bundleID)
+                }
             }
         }
     }
@@ -217,6 +224,10 @@ final class AppBootstrap: ObservableObject {
 
         Task {
             await persistenceStore.appendHistory(entry)
+        }
+
+        if notificationsEnabled, notificationPermissionGranted {
+            notificationService.sendSessionEnded(phase: entry.finalPhase.rawValue)
         }
     }
 

@@ -52,6 +52,7 @@ struct ContentView: View {
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
             }
             Stepper("Duration: \(bootstrap.selectedDurationMinutes) min", value: $bootstrap.selectedDurationMinutes, in: 1...180)
+            Toggle("Enable Session Notifications", isOn: $bootstrap.notificationsEnabled)
 
             HStack(spacing: 10) {
                 Button("Start") {
