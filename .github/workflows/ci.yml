@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          current="$(xcode-select -p)"
+          if [[ "$current" == *"CommandLineTools"* ]]; then
+            latest_xcode="$(ls -d /Applications/Xcode*.app/Contents/Developer 2>/dev/null | sort -V | tail -n 1 || true)"
+            if [[ -n "$latest_xcode" ]]; then
+              echo "DEVELOPER_DIR=$latest_xcode" >> "$GITHUB_ENV"
+              export DEVELOPER_DIR="$latest_xcode"
+            fi
+          fi
+
+          echo "Active developer dir: ${DEVELOPER_DIR:-$current}"
+          swift --version
+
+      - name: Resolve Swift packages
+        run: swift package resolve
+
+      - name: Build
+        run: swift build --build-tests
+
+      - name: Test
+        run: swift test --parallel
