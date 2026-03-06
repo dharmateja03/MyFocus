@@ -15,6 +15,42 @@ struct ContentView: View {
             Text("Helper status: \(bootstrap.helperStatus)")
                 .font(.body)
                 .foregroundStyle(.secondary)
+
+            if !bootstrap.accessibilityGranted || !bootstrap.notificationPermissionGranted {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Permissions Required")
+                        .font(.headline)
+                    Text("Accessibility is required for app blocking. Notifications are used for session reminders.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 10) {
+                        if !bootstrap.accessibilityGranted {
+                            Button("Grant Accessibility") {
+                                bootstrap.requestAccessibilityPermission()
+                            }
+                            Button("Open Accessibility Settings") {
+                                bootstrap.openAccessibilitySettings()
+                            }
+                        }
+
+                        if !bootstrap.notificationPermissionGranted {
+                            Button("Grant Notifications") {
+                                bootstrap.requestNotificationPermission()
+                            }
+                            Button("Open Notification Settings") {
+                                bootstrap.openNotificationSettings()
+                            }
+                        }
+
+                        Button("Refresh") {
+                            bootstrap.refreshPermissions()
+                        }
+                    }
+                }
+                .padding(12)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+            }
             Stepper("Duration: \(bootstrap.selectedDurationMinutes) min", value: $bootstrap.selectedDurationMinutes, in: 1...180)
 
             HStack(spacing: 10) {

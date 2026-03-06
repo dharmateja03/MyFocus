@@ -15,6 +15,8 @@ final class AppBootstrap: ObservableObject {
     @Published var notificationsEnabled = true {
         didSet { persistSettings() }
     }
+    @Published private(set) var accessibilityGranted = false
+    @Published private(set) var notificationPermissionGranted = false
     @Published var blockedAppInput = ""
     @Published private(set) var blockedAppBundleIDs: [String] = []
     @Published private(set) var blockedEventCount = 0
@@ -24,6 +26,7 @@ final class AppBootstrap: ObservableObject {
 
     private let sessionEngine = SessionEngine()
     private let appBlocker = ForegroundAppBlocker()
+    private let permissionService = PermissionService()
     private let persistenceStore = PersistenceStore()
     private var streamTask: Task<Void, Never>?
     private var activeSessionStartedAt: Date?
@@ -35,6 +38,9 @@ final class AppBootstrap: ObservableObject {
         bindAppBlocker()
         bindSessionEngine()
         loadPersistedState()
+        Task {
+            await refreshPermissionStatuses()
+        }
     }
 
     deinit {
@@ -127,6 +133,39 @@ final class AppBootstrap: ObservableObject {
         }
     }
 
+    func requestAccessibilityPermission() {
+        permissionService.requestAccessibilityPrompt()
+        Task {
+            await refreshPermissionStatuses()
+        }
+    }
+
+    func openAccessibilitySettings() {
+        permissionService.openAccessibilitySettings()
+    }
+
+    func requestNotificationPermission() {
+        Task {
+            let granted = await permissionService.requestNotificationAuthorization()
+            await MainActor.run {
+                self.notificationPermissionGranted = granted
+                if granted {
+                    self.notificationsEnabled = true
+                }
+            }
+        }
+    }
+
+    func openNotificationSettings() {
+        permissionService.openNotificationSettings()
+    }
+
+    func refreshPermissions() {
+        Task {
+            await refreshPermissionStatuses()
+        }
+    }
+
     private func bindAppBlocker() {
         appBlocker.onBlockedApp = { [weak self] event in
             Task { @MainActor in
@@ -211,6 +250,16 @@ final class AppBootstrap: ObservableObject {
 
         Task {
             await persistenceStore.saveSettings(settings)
+        }
+    }
+
+    private func refreshPermissionStatuses() async {
+        let accessibility = permissionService.isAccessibilityGranted()
+        let notifications = await permissionService.notificationAuthorizationGranted()
+
+        await MainActor.run {
+            self.accessibilityGranted = accessibility
+            self.notificationPermissionGranted = notifications
         }
     }
 }
