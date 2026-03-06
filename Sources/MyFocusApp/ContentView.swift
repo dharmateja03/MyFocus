@@ -73,6 +73,24 @@ struct ContentView: View {
                 }
             }
 
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Recent Sessions")
+                    .font(.headline)
+
+                List {
+                    ForEach(bootstrap.sessionHistory.prefix(10)) { entry in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(entry.finalPhase.rawValue.capitalized) • \(formattedTime(entry.durationSeconds))")
+                                .font(.caption.weight(.semibold))
+                            Text(entry.startedAt.formatted(date: .abbreviated, time: .shortened))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .frame(height: 120)
+            }
+
             if let errorMessage = bootstrap.lastSessionError {
                 Text(errorMessage)
                     .font(.caption)

@@ -9,22 +9,32 @@ final class AppBootstrap: ObservableObject {
         remainingSeconds: 0,
         blockedBundleIDs: []
     )
-    @Published var selectedDurationMinutes = 25
+    @Published var selectedDurationMinutes = 25 {
+        didSet { persistSettings() }
+    }
+    @Published var notificationsEnabled = true {
+        didSet { persistSettings() }
+    }
     @Published var blockedAppInput = ""
     @Published private(set) var blockedAppBundleIDs: [String] = []
     @Published private(set) var blockedEventCount = 0
     @Published private(set) var lastBlockedBundleID: String?
+    @Published private(set) var sessionHistory: [SessionHistoryEntry] = []
     @Published var lastSessionError: String?
 
     private let sessionEngine = SessionEngine()
     private let appBlocker = ForegroundAppBlocker()
+    private let persistenceStore = PersistenceStore()
     private var streamTask: Task<Void, Never>?
+    private var activeSessionStartedAt: Date?
+    private var previousPhase: SessionPhase = .idle
 
     init() {
         helperStatus = "Scaffold ready"
         appBlocker.start()
         bindAppBlocker()
         bindSessionEngine()
+        loadPersistedState()
     }
 
     deinit {
@@ -61,6 +71,9 @@ final class AppBootstrap: ObservableObject {
 
     func startSession() {
         let duration = max(1, selectedDurationMinutes) * 60
+        activeSessionStartedAt = .now
+        blockedEventCount = 0
+        lastBlockedBundleID = nil
 
         Task {
             do {
@@ -133,15 +146,71 @@ final class AppBootstrap: ObservableObject {
                 await MainActor.run {
                     self.sessionSnapshot = snapshot
                     self.appBlocker.setEnforcementEnabled(snapshot.phase == .running)
+                    self.captureHistoryIfNeeded(for: snapshot)
                 }
+            }
+        }
+    }
+
+    private func captureHistoryIfNeeded(for snapshot: SessionSnapshot) {
+        defer { previousPhase = snapshot.phase }
+        guard previousPhase != snapshot.phase else {
+            return
+        }
+
+        guard snapshot.phase == .completed || snapshot.phase == .cancelled else {
+            return
+        }
+
+        let startedAt = activeSessionStartedAt ?? Date().addingTimeInterval(-Double(selectedDurationMinutes * 60))
+        let endedAt = .now
+        let entry = SessionHistoryEntry(
+            id: UUID(),
+            startedAt: startedAt,
+            endedAt: endedAt,
+            durationSeconds: max(0, Int(endedAt.timeIntervalSince(startedAt))),
+            finalPhase: snapshot.phase,
+            blockedBundleIDs: snapshot.blockedBundleIDs
+        )
+
+        sessionHistory.insert(entry, at: 0)
+        activeSessionStartedAt = nil
+
+        Task {
+            await persistenceStore.appendHistory(entry)
+        }
+    }
+
+    private func loadPersistedState() {
+        Task {
+            let persisted = await persistenceStore.loadState()
+            await MainActor.run {
+                self.selectedDurationMinutes = persisted.settings.selectedDurationMinutes
+                self.notificationsEnabled = persisted.settings.notificationsEnabled
+                self.blockedAppBundleIDs = persisted.settings.blockedAppBundleIDs
+                self.sessionHistory = persisted.history
+                self.syncBlockedBundleIDs()
             }
         }
     }
 
     private func syncBlockedBundleIDs() {
         appBlocker.updateBlockedBundleIDs(blockedAppBundleIDs)
+        persistSettings()
         Task {
             await sessionEngine.updateBlockedBundleIDs(blockedAppBundleIDs)
+        }
+    }
+
+    private func persistSettings() {
+        let settings = AppSettings(
+            selectedDurationMinutes: selectedDurationMinutes,
+            blockedAppBundleIDs: blockedAppBundleIDs,
+            notificationsEnabled: notificationsEnabled
+        )
+
+        Task {
+            await persistenceStore.saveSettings(settings)
         }
     }
 }
