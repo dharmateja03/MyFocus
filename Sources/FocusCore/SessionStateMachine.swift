@@ -113,4 +113,10 @@ public actor SessionStateMachine {
 
         return state.snapshot()
     }
+
+    @discardableResult
+    public func updateBlockedBundleIDs(_ bundleIDs: [String]) -> SessionSnapshot {
+        state.blockedBundleIDs = bundleIDs
+        return state.snapshot()
+    }
 }

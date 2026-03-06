@@ -34,6 +34,45 @@ struct ContentView: View {
                 .disabled(!(bootstrap.isRunning || bootstrap.isPaused))
             }
 
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Blocked Apps (Bundle IDs)")
+                    .font(.headline)
+
+                HStack {
+                    TextField("com.apple.Safari", text: $bootstrap.blockedAppInput)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Add") {
+                        bootstrap.addBlockedBundleID()
+                    }
+                    .disabled(bootstrap.blockedAppInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+
+                List {
+                    ForEach(bootstrap.blockedAppBundleIDs, id: \.self) { bundleID in
+                        HStack {
+                            Text(bundleID)
+                                .font(.caption.monospaced())
+                            Spacer()
+                            Button("Remove") {
+                                bootstrap.removeBlockedBundleID(bundleID)
+                            }
+                            .buttonStyle(.link)
+                        }
+                    }
+                }
+                .frame(height: 120)
+
+                Text("Blocked attempts: \(bootstrap.blockedEventCount)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let lastBlockedBundleID = bootstrap.lastBlockedBundleID {
+                    Text("Last blocked app: \(lastBlockedBundleID)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             if let errorMessage = bootstrap.lastSessionError {
                 Text(errorMessage)
                     .font(.caption)

@@ -57,6 +57,11 @@ public actor SessionEngine {
         await stateMachine.snapshot()
     }
 
+    public func updateBlockedBundleIDs(_ bundleIDs: [String]) async {
+        let snapshot = await stateMachine.updateBlockedBundleIDs(bundleIDs)
+        continuation?.yield(snapshot)
+    }
+
     private func ensureTicker() {
         if tickerTask != nil {
             return
